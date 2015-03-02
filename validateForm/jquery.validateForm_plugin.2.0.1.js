@@ -6,7 +6,8 @@
         tmpTooltip = "<a class='tooltips' href='javascript:;' onclick='$(this).remove();' tabindex='-1'><span></span></a>",
         nameClassError = "alert-danger",
         msgErrorEmptyElement = "El campo no puede estar vacio",
-        inputsSearch = "input, textarea";
+        inputsSearch = "input, textarea",
+        estatus = false;
     
     var objValidation = {
         pgTextOnly : {
@@ -53,8 +54,20 @@
         }
         return -1;
     }
-    var isExist = function($this,idElement){
-        return ($this.data("elementsErrors").indexOf(idElement)!==-1);
+    var isExist = function($this,idElement, where){
+         for (index in $this.data("elementsErrors")){
+            if(where != null)
+            {
+                if($this.data("elementsErrors")[index].indexOf(where)!==-1 && $this.data("elementsErrors")[index].indexOf(idElement)!==-1)
+                {
+                    return true;
+                }
+            }else if($this.data("elementsErrors")[index].indexOf(idElement)!==-1)
+            {
+                return true;
+            }
+         }
+        return false;
     }
     var generateRandomKeys = function(size,onlyNum,isChar){
         if(typeof(onlyNum) ==='undefined') onlyNum = false;
@@ -77,11 +90,12 @@
     var showTooltip = function(it,msg){
         var objTT = $(tmpTooltip),
             elemPos = $(it).position(),
-            elemWid = $(it).outerWidth();        
+            elemWid = $(it).outerWidth();
         objTT.children("span").text(msg);
         $(it).siblings(".tooltips").remove();
         $(it).parent().append(objTT);
-        objTT.css({ "top": elemPos.top - 36, "left": (elemPos.left + elemWid / 2) - objTT.outerWidth() / 2});
+        objTT.css({"left": (elemPos.left + elemWid)/5 });
+        objTT.css({ "top": (elemPos.top - objTT.outerHeight() - 6)});
     }
     var onInputChange = function(e){        
         var it = $(e.target),
@@ -90,10 +104,10 @@
             idElement = it.attr("id"),
             title = it.attr("title"),
             argValid = "",
-            bnValid = true;        
+            bnValid = true,
+            where = "";        
         if (value == "") {
-            resetInput($this,it);
-            return false;
+            resetInput($this,it,"chkEmptyElements");
         }
         
         $.each(it.attr('class').split(/\s+/),function(ix,it){
@@ -101,29 +115,58 @@
             return bnValid = validExpression(it,value);
         })
         
+        where = "onInputChange-validExpression";
         if(!bnValid){
-            methods.putError.apply($this,[it]);
+            methods.putError.apply($this,[it,where]);
             if(!title) title = validMessage(argValid);
             showTooltip(it,title);
-        }else{ 
-            resetInput($this,it);
+        }else{
+            resetInput($this,it,where);
         }
+        where = "validLength";
         if (!validLength(it)) {
-            methods.putError.apply($this,[it]);
+            methods.putError.apply($this,[it,where]);
             showTooltip(it,"La cantidad de caracteres es incorrecta");                    
         } else {
-            if(!isExist($this,idElement)){
-                resetInput($this,it);
+            if(isExist($this,idElement)){
+                resetInput($this,it,where);
+            }
+        }
+        where = "onInputChange-chkEquals";
+        if (!chkEquals(it)) {
+            methods.putError.apply($this,[it,where]);
+            showTooltip(it,"Las casillas no coinciden");                    
+        } else {
+            if(isExist($this,idElement)){
+                resetInput($this,it,where);
             }
         }
     }
-    var resetInput = function(frmThis,input){
-        $(input).removeClass(nameClassError);
-        $(input).siblings(".tooltips").remove();
-        var index = frmThis.data("elementsErrors").indexOf($(input).attr("id"));
-        if (index != -1) {
-            frmThis.data("elementsErrors").splice(index, 1);
-        }        
+    var resetInput = function(frmThis,input,where){
+        var IdElement =$(input).attr("id");
+        var errorArray = [];
+        if(isExist(frmThis,IdElement,where)){
+            $(input).removeClass(nameClassError);
+            $(input).siblings(".tooltips").remove();
+            for(index in frmThis.data("elementsErrors")){
+                if (frmThis.data("elementsErrors")[index].indexOf(IdElement) !== -1) {
+                    errorArray = frmThis.data("elementsErrors")[index];
+                    errorArray = errorArray.split(":");
+                    indexy = errorArray.indexOf(where);
+                    if(indexy !== -1)
+                    {
+                        errorArray.splice(indexy, 1);
+                        if(errorArray.length<=1)
+                        {
+                        $this.data("elementsErrors").splice(index,1);
+                        }else{
+                            resp = errorArray.join(":");
+                            $this.data("elementsErrors")[index] = resp;
+                        }
+                    }
+                }
+            }
+        }
     }
     var validExpression = function(name,valor){        
         if(typeof objValidation[name] === "object"){            
@@ -135,10 +178,10 @@
         return objValidation[name].msg;
     }
     var validLength = function(it){
-        var valMin = 0;
-        var valMax = 50000;
-        var valMaxMin = false;
-        if ($(it).is('[class*="pgMax-"]') ||$(it).is('[class*="pgMin-"]') ) {
+        var valMin = 0,
+         valMax = 50000,
+         valMaxMin = false;
+        if ($(it).is('[class*="pgMax-"]') || $(it).is('[class*="pgMin-"]') ) {
             var clases = $(it).attr("class").split(" ");
             for (itemKey in clases) {
                 if (clases[itemKey].indexOf("pgMax-") !== -1) valMax = clases[itemKey].split("-")[1];                    
@@ -148,6 +191,24 @@
         }        
         if (valMaxMin) {              
             return !($(it).val().length > valMax || $(it).val().length < valMin);
+        }
+        return true;
+    }
+     var chkEquals = function (it) {
+        var idInput = "",
+        valchek = false;
+        if($(it).val() !==""){
+            if ($(it).is('[class*="pgEqls-"]')) 
+            {
+                var clases = $(it).attr("class").split(" ");
+                for (itemKey in clases) {
+                    if (clases[itemKey].indexOf("pgEqls-") !== -1) idInput = clases[itemKey].split("-")[1];                    
+                }
+                valchek = true;
+            }
+            if (valchek) {              
+                return ($(it).val() === $("#"+idInput).val());
+            }
         }
         return true;
     }
@@ -187,20 +248,92 @@
                     if ($(item).val() === "") {
                         valResp = false;
                         showTooltip(item,msgErrorEmptyElement);
-                        methods.putError.apply($this,[item]);
-                    } else {                        
-                        resetInput($this,item);
+                        methods.putError.apply($this,[item,"chkEmptyElements"]);
+                    } else {  
+                        resetInput($this,item,"chkEmptyElements");
                     }
                 }
             });
             return valResp;
         },
-        putError: function (it) {
+        chkEquals: function () {
+            var valResp = true,
+                $this = $(this),
+                idInput = "";
+            $this.find(inputsSearch).each(function (index, item) {
+                if ($(item).is('[class*="pgEqls-"]')) 
+                {
+                    var clases = $(item).attr("class").split(" ");
+                    for (itemKey in clases) {
+                        if (clases[itemKey].indexOf("pgEqls-") !== -1) idInput = clases[itemKey].split("-")[1];                    
+                    }
+                    if ($(item).val() !== $("#"+idInput).val()) {
+                        valResp = false;
+                        showTooltip(item,"Las casillas no coinciden");
+                        methods.putError.apply($this,[item,"chkEquals"]);
+                    } else {
+                        resetInput($this,item,"chkEquals");
+                    }
+                }
+            });
+            return valResp;
+        },
+        chkPgMaxMin: function(){
+            var valResp = true,                
+                $this = $(this),
+                valMin = 0,
+                valMax = 50000;
+            $this.find(inputsSearch).each(function (index, item) {
+                var valMaxMin = false;
+                if ($(item).hasClass("pgReq")) {
+                    if ($(item).is('[class*="pgMax-"]') ||$(item).is('[class*="pgMin-"]') ) {
+                        var clases = $(item).attr("class").split(" ");
+                        for (itemKey in clases) {
+                            if (clases[itemKey].indexOf("pgMax-") !== -1) valMax = clases[itemKey].split("-")[1];                    
+                            if (clases[itemKey].indexOf("pgMin-") !== -1) valMin = clases[itemKey].split("-")[1]; 
+                        }
+                        valMaxMin = true;
+                    }        
+                    if (valMaxMin) 
+                    {
+                        if($(item).val().length > valMax || $(item).val().length < valMin)
+                        {
+                            methods.putError.apply($this,[item,"validLength"]);
+                            showTooltip(item,"La cantidad de caracteres es incorrecta el rango establesido es: Minimo="+valMin+" y Maximo="+valMax);
+                            valResp = false;
+                        }
+                    }
+                }
+            });
+            
+            return valResp;
+        },
+        putError: function (it,where) {
             var IdElement = $(it).attr("id");
+            var errorArray = [];
             $(it).addClass(nameClassError)
             if(!isExist(this,IdElement)){
-                this.data("elementsErrors").push(IdElement);
-            }            
+                errorArray.push(IdElement);
+                errorArray.push(where);
+                resp = errorArray.join(":");
+                //this.data("elementsErrors",errorArray);
+                this.data("elementsErrors").push(resp);
+                console.log($("#frmLog").data("elementsErrors"));
+            }else{
+                if(!isExist(this,IdElement,where))
+                {
+                    for (index in $this.data("elementsErrors")){
+                        if($this.data("elementsErrors")[index].indexOf(IdElement)!==-1)
+                        {
+                            errorArray = $this.data("elementsErrors")[index];
+                            errorArray = errorArray.split(":");
+                            errorArray.push(where);
+                            resp = errorArray.join(":");
+                            $this.data("elementsErrors")[index] = resp;
+                        }
+                    }
+                }
+            }
         },
         removeError: function (IdElement) {            
             resetInput($(this),$("#"+IdElement));
@@ -215,6 +348,11 @@
                 $(this).siblings(".tooltips").remove();
                 return true;
             }            
+        },
+        showMyTooltip: function($inpute,msg){
+            showTooltip($inpute,msg);
+            methods.putError.apply(this,[$inpute,"showMyTooltip"]);
+            return true;         
         }
     };
     // ***** Fin: Public Methods *****
